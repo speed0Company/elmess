@@ -101,7 +101,7 @@ class _DayCheckScreenState extends State<DayCheckScreen> {
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(vertical: 20),
                 child: costData != null
-                    ? CostTable(costData: costData!)
+                    ? CostTable(initialCostData: costData!)
                     : CircularProgressIndicator(), // Show a loading indicator while data is loading
               ),
             ),
