@@ -177,10 +177,8 @@ class _AddNewNameState extends State<AddNewName> {
                   onTap: () async {
                     if (_formKey.currentState!.validate()) {
                       setState(() {
-                        final updatedName = nameController.text;
-                        final existingCostInDay = names[index]['costInDay'];
-                        names[index] = {'name': updatedName, 'costInDay': existingCostInDay};
-                        oldData[index] = {'name': updatedName, 'costInDay': existingCostInDay};
+                        names[index]['name'] = nameController.text;
+                        oldData[index]['name'] = nameController.text;
                         saveNamesToPrefs();
                         saveOldDataToPrefs();
                       });
@@ -196,7 +194,6 @@ class _AddNewNameState extends State<AddNewName> {
       },
     );
   }
-
   void deleteName(int index) {
     setState(() {
       names.removeAt(index);
