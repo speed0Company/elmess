@@ -61,12 +61,20 @@ class _AddItemScreenState extends State<AddItemScreen> {
     setState(() {
       items = items.map((item) {
         if (item.name == selectedItem) {
-          item.quantity = quantityController.text == "" ? item.quantity : quantityController.text; // Update quantity
-          if (double.tryParse(priceController.text) != item.price) {
-            item.price = double.tryParse(priceController.text) ?? double.parse(item.price.toString()); // Update price if different
+          double oldQuantity = double.parse(item.quantity.toString());
+          double oldPrice = item.price;
+          double newQuantity = quantityController.text.isEmpty ? oldQuantity : double.parse(quantityController.text);
+          double newPrice = priceController.text.isEmpty ? oldPrice : double.parse(priceController.text);
+          double totalNewQuantity=oldQuantity+newQuantity;
+          // Update quantity
+          item.quantity = totalNewQuantity.toString();
+
+          // Calculate the new price based on the given formula
+          if (newPrice != oldPrice) {
+            item.price = ((oldPrice * oldQuantity + newPrice) / (oldQuantity + newQuantity));
+            item.price = double.parse(item.price.toStringAsFixed(1)); // Fix the price to one decimal place
           }
         }
-
         return item;
       }).toList();
 
@@ -75,7 +83,6 @@ class _AddItemScreenState extends State<AddItemScreen> {
       saveItemsToPrefs(); // Save updated data to SharedPreferences
     });
   }
-
   void showAddItemDialog(BuildContext context) {
     TextEditingController newItemNameController = TextEditingController();
     TextEditingController newQuantityController = TextEditingController();

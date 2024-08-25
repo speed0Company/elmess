@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/item_model.dart';
@@ -27,10 +28,12 @@ class _UsageScreenState extends State<UsageScreen> {
   }
   ''';
 
-  String oldData='[]';
+  String oldData = '[]';
 
   bool haveUsage = true;
   bool namesAvailable = true;
+  bool isToastVisible = false;
+
 
   Future<void> loadItemsFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -39,7 +42,8 @@ class _UsageScreenState extends State<UsageScreen> {
       setState(() {
         itemsJson = storedItemsJson;
         items = parseItemData(itemsJson);
-        controllers = List.generate(items.length, (index) => TextEditingController(text: '0'));
+        controllers = List.generate(
+            items.length, (index) => TextEditingController(text: '0'));
       });
     } else {
       setState(() {
@@ -64,7 +68,6 @@ class _UsageScreenState extends State<UsageScreen> {
         names = List<Map<String, dynamic>>.from(decodedJson['names']);
         selected = List<bool>.filled(names.length, false);
         namesAvailable = true;
-
       });
     }
   }
@@ -110,10 +113,10 @@ class _UsageScreenState extends State<UsageScreen> {
 
     double total = 0.0;
     for (int i = 0; i < items.length; i++) {
-      int quantity = int.tryParse(controllers[i].text) ?? 0;
+      double quantity = double.tryParse(controllers[i].text) ?? 0;
       total += quantity * items[i].price;
     }
-    return total / selectedCount;
+    return double.parse((total / selectedCount).toStringAsFixed(1));
   }
 
   void updateSelectedNames() {
@@ -141,7 +144,7 @@ class _UsageScreenState extends State<UsageScreen> {
             names[i]['addedCost'] = newCost;
           } else {
             // Add a new day entry
-            double newCost = calculateTotalPrice();
+            double newCost = double.parse(calculateTotalPrice().toStringAsFixed(1));
             costInDayList.add({
               'day': selectedDay,
               'cost': newCost,
@@ -202,26 +205,57 @@ class _UsageScreenState extends State<UsageScreen> {
     oldData = jsonEncode(oldDataList);
     saveOldDataToPrefs();
 
+    showToast("تم إضافة المنتجات بنجاح", Colors.green);
+
     print(oldData); // For debugging
   }
-
   void decreaseItemQuantities() {
+    // Check if any name is selected
+    bool isAnyNameSelected = selected.any((element) => element == true);
+
+    if (!isAnyNameSelected) {
+      showToast("لم يتم تحديد أي اسم. لا يمكن إضافة المنتج.", Colors.red);
+      return;
+    }
+
     setState(() {
+      bool allControllersZero = true;
+
       for (int i = 0; i < items.length; i++) {
-        int usedQuantity = int.tryParse(controllers[i].text) ?? 0;
-        int currentQuantity = int.tryParse(items[i].quantity) ?? 0;
+        double usedQuantity = double.tryParse(controllers[i].text) ?? 0.0;
+        double currentQuantity = double.tryParse(items[i].quantity) ?? 0.0;
+
+        // Ensure usedQuantity does not exceed currentQuantity
         if (usedQuantity > currentQuantity) {
           usedQuantity = currentQuantity;
         }
-        items[i].quantity = (currentQuantity - usedQuantity).toString();
+
+        if (usedQuantity != 0.0) {
+          print(usedQuantity);
+          allControllersZero = false;
+        }
+
+        double newQuantity = currentQuantity - usedQuantity;
+
+        if (newQuantity > 0.0) {
+          items[i].quantity = newQuantity.toString();
+        } else {
+          // Remove item if the quantity becomes 0 or less
+          items.removeAt(i);
+          controllers.removeAt(i);
+          i--; // Adjust the index after removing the item
+        }
       }
 
       // Update the itemsJson with the new list of items, converting each ItemData to JSON
       itemsJson = jsonEncode(items.map((item) => item.toJson()).toList());
       saveItemsToPrefs();
+
+      if (allControllersZero) {
+        showToast("يجب اختيار منتج واحد على الأقل", Colors.red);
+      }
     });
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -238,116 +272,172 @@ class _UsageScreenState extends State<UsageScreen> {
           },
         ),
       ),
-      body: haveUsage ? Column(
-        children: [
-          TextTitle(title: "قائمة الاستهلاك"),
-
-          Expanded(
-            child: SingleChildScrollView(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SizedBox(height: 20,),
-                    CustomItemTable(
-                      items: items,
-                      controllers: controllers,
-                    ),
-                    SizedBox(height: 20,),
-                    namesAvailable ? Column(
-                      children: [
-                        TextTitle(title: "حدد الاسماء"),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Center(
-                            child: Wrap(
-                              spacing: 20.0,
-                              runSpacing: 20.0,
-                              children: List.generate(names.length, (index) {
-                                return Row(
-                                  mainAxisSize: MainAxisSize.min,
+      body: haveUsage
+          ? Column(
+              children: [
+                TextTitle(title: "قائمة الاستهلاك"),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: 20,
+                          ),
+                          CustomItemTable(
+                            items: items,
+                            controllers: controllers,
+                          ),
+                          SizedBox(
+                            height: 20,
+                          ),
+                          namesAvailable
+                              ? Column(
                                   children: [
-                                    Checkbox(
-                                      value: selected[index],
-                                      onChanged: (bool? value) {
-                                        setState(() {
-                                          selected[index] = value!;
-                                        });
-                                      },
-                                      activeColor: Colors.blue,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(5),
-                                        side: BorderSide(color: Colors.grey),
+                                    TextTitle(title: "حدد الاسماء"),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16.0),
+                                      child: Center(
+                                        child: Wrap(
+                                          spacing: 20.0,
+                                          runSpacing: 20.0,
+                                          children: List.generate(names.length,
+                                              (index) {
+                                            return Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Checkbox(
+                                                  value: selected[index],
+                                                  onChanged: (bool? value) {
+                                                    setState(() {
+                                                      selected[index] = value!;
+                                                    });
+                                                  },
+                                                  activeColor: Colors.blue,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            5),
+                                                    side: BorderSide(
+                                                        color: Colors.grey),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  names[index]['name'],
+                                                  style: GoogleFonts.getFont(
+                                                    'Rubik',
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 15,
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          }),
+                                        ),
                                       ),
                                     ),
-                                    Text(
-                                      names[index]['name'],
-                                      style: GoogleFonts.getFont('Rubik',
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
-                                      ),
+                                    SizedBox(
+                                      height: 20,
+                                    ),
+                                    GestureDetector(
+                                        onTap: () async {
+                                          final DateTime? picked =
+                                              await showDatePicker(
+                                            context: context,
+                                            initialDate: DateTime.now(),
+                                            firstDate: DateTime(
+                                                DateTime.now().year,
+                                                DateTime.now().month,
+                                                1), // optional
+                                            lastDate: DateTime(
+                                                DateTime.now().year,
+                                                DateTime.now().month + 1,
+                                                0), // optional
+                                            builder: (BuildContext context,
+                                                Widget? child) {
+                                              return Theme(
+                                                data: ThemeData(
+                                                  colorScheme:
+                                                      ColorScheme.light(
+                                                    primary: Colors
+                                                        .blue, // change the color of the date picker
+                                                  ),
+                                                ),
+                                                child: child!,
+                                              );
+                                            },
+                                          );
+                                          if (picked != null) {
+                                            // get the day of the month from the picked date
+                                            int day = picked.day;
+                                            // do something with the day, e.g. print it
+                                            selectedDay = day;
+                                          }
+                                        },
+                                        child: Image.asset(
+                                          'assets/date_button.png',
+                                          width: 181,
+                                          height: 50,
+                                          fit: BoxFit.fill,
+                                        )),
+                                    SizedBox(
+                                      height: 20,
+                                    ),
+                                    GestureDetector(
+                                        onTap: () {
+                                          print(selected);
+
+                                          decreaseItemQuantities();
+                                          updateSelectedNames();
+                                        },
+                                        child: Image.asset(
+                                          'assets/add_button.png',
+                                          width: 181,
+                                          height: 50,
+                                          fit: BoxFit.fill,
+                                        )),
+                                    SizedBox(
+                                      height: 20,
                                     ),
                                   ],
-                                );
-                              }),
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 20,),
-                        GestureDetector(
-                            onTap: () async {
-                              final DateTime? picked = await showDatePicker(
-                                context: context,
-                                initialDate: DateTime.now(),
-                                firstDate: DateTime(DateTime.now().year, DateTime.now().month, 1), // optional
-                                lastDate: DateTime(DateTime.now().year, DateTime.now().month + 1, 0), // optional
-                                builder: (BuildContext context, Widget? child) {
-                                  return Theme(
-                                    data: ThemeData(
-                                      colorScheme: ColorScheme.light(
-                                        primary: Colors.blue, // change the color of the date picker
-                                      ),
-                                    ),
-                                    child: child!,
-                                  );
-                                },
-                              );
-                              if (picked != null) {
-                                // get the day of the month from the picked date
-                                int day = picked.day;
-                                // do something with the day, e.g. print it
-                                selectedDay = day;
-                              }
-                            },
-                            child: Image.asset('assets/date_button.png', width: 181, height: 50, fit: BoxFit.fill,)),
-                        SizedBox(height: 20,),
-                        GestureDetector(
-                            onTap: () {
-                              print(selected);
-
-                              decreaseItemQuantities();
-                              updateSelectedNames();
-                            },
-                            child: Image.asset('assets/add_button.png', width: 181, height: 50, fit: BoxFit.fill,)),
-                        SizedBox(height: 20,),
-                      ],
-                    ) : Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: TextTitle(title: "لا يوجد اسماء مسجلة"),
-                    )
-                  ],
+                                )
+                              : Padding(
+                                  padding: const EdgeInsets.all(20.0),
+                                  child:
+                                      TextTitle(title: "لا يوجد اسماء مسجلة"),
+                                )
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
-        ],
-      ) : Center(child: TextTitle(title: "لا يوجد منتجات")),
+              ],
+            )
+          : Center(child: TextTitle(title: "لا يوجد منتجات")),
     );
   }
 
   List<ItemData> parseItemData(String responseBody) {
     final parsed = json.decode(responseBody).cast<Map<String, dynamic>>();
     return parsed.map<ItemData>((json) => ItemData.fromJson(json)).toList();
+  }
+  void showToast(String message, Color backgroundColor) {
+    if (!isToastVisible) {
+      isToastVisible = true;
+      Fluttertoast.showToast(
+        msg: message,
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        timeInSecForIosWeb: 1,
+        backgroundColor: backgroundColor,
+        textColor: Colors.white,
+        fontSize: 16.0,
+      ).then((_) {
+        isToastVisible = false;
+      });
+    }
   }
 }

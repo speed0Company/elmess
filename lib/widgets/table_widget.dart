@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helper/helper.dart';
 import '../models/data_model.dart';
@@ -52,10 +55,15 @@ class CostTable extends StatelessWidget {
               rows: costData.map((data) {
                 return DataRow(cells: [
                   for (int i = 1; i <= daysInMonth; i++)
-                    DataCell(Text(getCostForDay(data.costInDay, i).toString(),style: GoogleFonts.rubik(
-                        color: Colors.black,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold),)),
+                    DataCell(GestureDetector(
+                      onLongPress: (){
+                        _showEditCostDialog(context, data, data.costInDay[i]);
+                      },
+                      child: Text(getCostForDay(data.costInDay, i).toString(),style: GoogleFonts.rubik(
+                          color: Colors.black,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold),),
+                    )),
                 ]);
               }).toList(),
             ),
@@ -71,5 +79,58 @@ class CostTable extends StatelessWidget {
     } catch (e) {
       return 0; // or any default value if no cost is found for the day
     }
+  }
+  void _showEditCostDialog(BuildContext context, CostData costDataItem, DayCost dayCost) {
+    TextEditingController costController = TextEditingController(text: dayCost.cost.toString());
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Edit Cost for Day ${dayCost.day}"),
+          content: TextFormField(
+            controller: costController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(labelText: "New Cost"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+              },
+            ),
+            ElevatedButton(
+              child: Text("Save"),
+              onPressed: () async {
+                double? newCost = double.tryParse(costController.text);
+                if (newCost != null) {
+                  // Update the cost in the DayCost object
+                  dayCost.cost = newCost;
+
+                  // Save the updated data to SharedPreferences
+                  await _saveCostDataToPrefs(costData);
+
+                  // Close the dialog and refresh the UI
+                  Navigator.of(context).pop();
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+  Future<void> _saveCostDataToPrefs(List<CostData> costData) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String updatedJsonData = jsonEncode(costData.map((costDataItem) => {
+      'name': costDataItem.name,
+      'costInDay': costDataItem.costInDay.map((dayCost) => {
+        'day': dayCost.day,
+        'cost': dayCost.cost,
+      }).toList(),
+    }).toList());
+
+    prefs.setString('oldData', updatedJsonData);
   }
 }

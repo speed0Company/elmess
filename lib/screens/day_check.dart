@@ -1,9 +1,10 @@
-import 'package:almes/helper/helper.dart';
-import 'package:almes/models/data_model.dart';
-import 'package:almes/widgets/table_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:almes/helper/helper.dart';
+import 'package:almes/models/data_model.dart';
+import 'package:almes/widgets/table_widget.dart';
+import 'dart:convert';
 
 class DayCheckScreen extends StatefulWidget {
   DayCheckScreen({super.key});
@@ -14,7 +15,6 @@ class DayCheckScreen extends StatefulWidget {
 
 class _DayCheckScreenState extends State<DayCheckScreen> {
   String jsonData = '[]'; // Default to empty array
-
   List<CostData>? costData;
 
   @override
@@ -26,7 +26,6 @@ class _DayCheckScreenState extends State<DayCheckScreen> {
   Future<void> loadCostDataFromPrefs() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? storedJsonData = prefs.getString('oldData');
-    print(storedJsonData);
     if (storedJsonData != null) {
       setState(() {
         jsonData = storedJsonData;
@@ -39,11 +38,35 @@ class _DayCheckScreenState extends State<DayCheckScreen> {
     }
   }
 
+  Future<void> resetAllCosts() async {
+    if (costData != null) {
+      setState(() {
+        // Set all costs to 0
+        for (var costDataItem in costData!) {
+          for (var dayCost in costDataItem.costInDay) {
+            dayCost.cost = 0;
+          }
+        }
+      });
+
+      // Save the updated costData to SharedPreferences
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String updatedJsonData = jsonEncode(costData!.map((costDataItem) => {
+        'name': costDataItem.name,
+        'costInDay': costDataItem.costInDay.map((dayCost) => {
+          'day': dayCost.day,
+          'cost': dayCost.cost,
+        }).toList(),
+      }).toList());
+
+      prefs.setString('oldData', updatedJsonData); // Save the new JSON data
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        notificationPredicate: (_) => false,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: Transform.rotate(
@@ -82,6 +105,22 @@ class _DayCheckScreenState extends State<DayCheckScreen> {
                     : CircularProgressIndicator(), // Show a loading indicator while data is loading
               ),
             ),
+            SizedBox(height: 10),
+            // Add a button to reset costs
+            ElevatedButton(
+              onPressed: resetAllCosts,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xff004251),
+              ),
+              child: Text(
+                "تفريغ البيانات",
+                style: GoogleFonts.rubik(
+                  fontSize: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            Spacer(),
           ],
         ),
       ),

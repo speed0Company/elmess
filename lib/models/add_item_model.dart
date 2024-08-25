@@ -2,12 +2,12 @@ import 'dart:convert';
 
 class AddItemModel {
   String name;
-  int pieces;
+  double pieces;
   double price;
 
   AddItemModel({
     required this.name,
-    this.pieces = 0, // Default to 0
+    this.pieces = 0.0, // Default to 0
     this.price = 0.0, // Default to 0.0
   });
 
